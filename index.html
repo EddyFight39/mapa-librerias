@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mapa de Librerías – Azuay y Guayas</title>
+
+  <!-- Leaflet base -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- MarkerCluster (agrupación de puntos) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+  />
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: system-ui, sans-serif;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .leaflet-popup-content {
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    /* Panel de controles superior */
+    #top-bar {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      max-width: 98%;
+    }
+
+    #top-bar h1 {
+      font-size: 16px;
+      margin: 0 8px 0 0;
+      white-space: nowrap;
+    }
+
+    #top-bar input[type="text"],
+    #top-bar select {
+      font-size: 13px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      min-width: 150px;
+    }
+
+    #resetButton {
+      font-size: 13px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #999;
+      background-color: #f2f2f2;
+      cursor: pointer;
+    }
+
+    #resetButton:hover {
+      background-color: #e0e0e0;
+    }
+
+    #info-count {
+      font-size: 13px;
+      color: #333;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 600px) {
+      #top-bar {
+        top: 5px;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      #top-bar h1 {
+        margin-bottom: 4px;
+      }
+    }
+
+    /* Estilos de los clusters tipo "verde-amarillo-naranja-rojo" */
+
+    .marker-cluster-small {
+      background-color: rgba(110, 204, 57, 0.6); /* verde */
+      color: white;
+    }
+
+    .marker-cluster-medium {
+      background-color: rgba(240, 194, 12, 0.6); /* amarillo */
+      color: white;
+    }
+
+    .marker-cluster-large {
+      background-color: rgba(241, 128, 23, 0.6); /* naranja */
+      color: white;
+    }
+
+    .marker-cluster-xlarge {
+      background-color: rgba(255, 80, 0, 0.7); /* rojo */
+      color: white;
+    }
+
+    .marker-cluster div {
+      width: 40px;
+      height: 40px;
+      margin-left: -20px;
+      margin-top: -20px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 40px;
+      font-size: 14px;
+      font-weight: bold;
+      border: 2px solid white;
+    }
+
+    /* Leyenda de colores (abajo a la izquierda) */
+    #legend {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 8px 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    #legend .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 3px;
+    }
+
+    #legend .color-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid #999;
+    }
+
+    .legend-small { background-color: rgba(110, 204, 57, 0.8); }   /* verde */
+    .legend-medium { background-color: rgba(240, 194, 12, 0.8); }  /* amarillo */
+    .legend-large { background-color: rgba(241, 128, 23, 0.8); }   /* naranja */
+    .legend-xlarge { background-color: rgba(255, 80, 0, 0.9); }    /* rojo */
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Controles -->
+  <div id="top-bar">
+    <h1>📚 Librerías Azuay & Guayas</h1>
+
+    <select id="provinciaFilter">
+      <option value="all">Todas las provincias</option>
+    </select>
+
+    <select id="cantonFilter">
+      <option value="all">Todos los cantones</option>
+    </select>
+
+    <select id="parroquiaFilter">
+      <option value="all">Todas las parroquias</option>
+    </select>
+
+    <input id="searchInput" type="text" placeholder="Buscar por nombre o RUC..." />
+
+    <button id="resetButton">Reset filtros</button>
+
+    <span id="info-count">Cargando librerías...</span>
+  </div>
+
+  <!-- Leyenda de colores -->
+  <div id="legend">
+    <strong>Clúster de librerías</strong>
+    <div class="legend-item">
+      <span class="color-dot legend-small"></span>
+      <span>Pocas (1 - 49)</span>
+    </div>
+    <div class="legend-item">
+      <span class="color-dot legend-medium"></span>
+      <span>Medias (50 - 199)</span>
+    </div>
+    <div class="legend-item">
+      <span class="color-dot legend-large"></span>
+      <span>Altas (200 - 999)</span>
+    </div>
+    <div class="legend-item">
+      <span class="color-dot legend-xlarge"></span>
+      <span>Muy altas (1000+)</span>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <script>
+    // Archivo combinado Azuay + Guayas
+    const JSON_FILE = 'librerias_azuay_guayas_final.json';
+
+    // Crear mapa centrado entre Azuay y Guayas
+    var map = L.map('map').setView([-2.4, -79.4], 7);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Grupo de clústeres con colores personalizados
+    var markerCluster = L.markerClusterGroup({
+      maxClusterRadius: 40,
+      iconCreateFunction: function (cluster) {
+        const count = cluster.getChildCount();
+
+        let sizeClass = 'marker-cluster-small';
+        if (count >= 1000) {
+          sizeClass = 'marker-cluster-xlarge'; // rojo
+        } else if (count >= 200) {
+          sizeClass = 'marker-cluster-large'; // naranja
+        } else if (count >= 50) {
+          sizeClass = 'marker-cluster-medium'; // amarillo
+        } else {
+          sizeClass = 'marker-cluster-small'; // verde
+        }
+
+        return new L.DivIcon({
+          html: `<div>${count}</div>`,
+          className: `marker-cluster ${sizeClass}`,
+          iconSize: L.point(40, 40)
+        });
+      }
+    });
+
+    let allData = [];
+    const provinciaFilter = document.getElementById('provinciaFilter');
+    const cantonFilter = document.getElementById('cantonFilter');
+    const parroquiaFilter = document.getElementById('parroquiaFilter');
+    const searchInput = document.getElementById('searchInput');
+    const resetButton = document.getElementById('resetButton');
+    const infoCount = document.getElementById('info-count');
+
+    // Cargar JSON
+    fetch(JSON_FILE)
+      .then(response => response.json())
+      .then(data => {
+        allData = data || [];
+        fillProvinciaFilter(allData);
+        fillCantonFilter(allData);
+        fillParroquiaFilter(allData);
+        applyFilters(); // primera renderización
+      })
+      .catch(err => {
+        console.error('Error al cargar JSON:', err);
+        infoCount.textContent = 'Error al cargar datos';
+      });
+
+    // Llenar combo de provincias
+    function fillProvinciaFilter(data) {
+      const provincias = new Set();
+      data.forEach(item => {
+        if (item.provincia) {
+          provincias.add(item.provincia.trim());
+        }
+      });
+      const sorted = Array.from(provincias).sort();
+      sorted.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        provinciaFilter.appendChild(opt);
+      });
+    }
+
+    // Llenar combo de cantones según provincia
+    function fillCantonFilter(data) {
+      const provinciaSelected = provinciaFilter.value;
+
+      // limpiar cantones actuales
+      while (cantonFilter.firstChild) {
+        cantonFilter.removeChild(cantonFilter.firstChild);
+      }
+      const optAll = document.createElement('option');
+      optAll.value = 'all';
+      optAll.textContent = 'Todos los cantones';
+      cantonFilter.appendChild(optAll);
+
+      const cantones = new Set();
+      data.forEach(item => {
+        const prov = (item.provincia || '').trim();
+        const canton = (item.canton || '').trim();
+        if (!canton) return;
+
+        if (provinciaSelected === 'all' || prov === provinciaSelected) {
+          cantones.add(canton);
+        }
+      });
+
+      const sorted = Array.from(cantones).sort();
+      sorted.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        cantonFilter.appendChild(opt);
+      });
+    }
+
+    // Llenar combo de parroquias según provincia y cantón
+    function fillParroquiaFilter(data) {
+      const provinciaSelected = provinciaFilter.value;
+      const cantonSelected = cantonFilter.value;
+
+      while (parroquiaFilter.firstChild) {
+        parroquiaFilter.removeChild(parroquiaFilter.firstChild);
+      }
+      const optAll = document.createElement('option');
+      optAll.value = 'all';
+      optAll.textContent = 'Todas las parroquias';
+      parroquiaFilter.appendChild(optAll);
+
+      const parroquias = new Set();
+      data.forEach(item => {
+        const prov = (item.provincia || '').trim();
+        const canton = (item.canton || '').trim();
+        const parr = (item.parroquia || '').trim();
+        if (!parr) return;
+
+        if (
+          (provinciaSelected === 'all' || prov === provinciaSelected) &&
+          (cantonSelected === 'all' || canton === cantonSelected)
+        ) {
+          parroquias.add(parr);
+        }
+      });
+
+      const sorted = Array.from(parroquias).sort();
+      sorted.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        parroquiaFilter.appendChild(opt);
+      });
+    }
+
+    // Aplicar filtros: provincia + cantón + parroquia + texto
+    function applyFilters() {
+      const provinciaSelected = provinciaFilter.value;
+      const cantonSelected = cantonFilter.value;
+      const parroquiaSelected = parroquiaFilter.value;
+      const term = searchInput.value.trim().toLowerCase();
+
+      const filtered = allData.filter(item => {
+        const prov = (item.provincia || '').trim();
+        const canton = (item.canton || '').trim();
+        const parr = (item.parroquia || '').trim();
+        const nombre = (item.razon_social || '').toLowerCase();
+        const ruc = (item.ruc || '').toLowerCase();
+
+        // filtro por provincia
+        if (provinciaSelected !== 'all' && prov !== provinciaSelected) {
+          return false;
+        }
+
+        // filtro por cantón
+        if (cantonSelected !== 'all' && canton !== cantonSelected) {
+          return false;
+        }
+
+        // filtro por parroquia
+        if (parroquiaSelected !== 'all' && parr !== parroquiaSelected) {
+          return false;
+        }
+
+        // filtro por texto (nombre o RUC)
+        if (term) {
+          if (!nombre.includes(term) && !ruc.includes(term)) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+      drawMarkers(filtered);
+    }
+
+    // Dibujar marcadores
+    function drawMarkers(data) {
+      markerCluster.clearLayers();
+
+      data.forEach(item => {
+        if (!item.lat || !item.lng) return;
+
+        var marker = L.circleMarker([item.lat, item.lng], {
+          radius: 5,
+          color: '#0033cc',
+          fillColor: '#66aaff',
+          fillOpacity: 0.8,
+          weight: 1
+        });
+
+        marker.bindPopup(
+          `<b>${item.razon_social}</b><br>
+           Provincia: ${item.provincia || '-'}<br>
+           Cantón: ${item.canton || '-'}<br>
+           Parroquia: ${item.parroquia || '-'}<br>
+           RUC: ${item.ruc}<br>
+           <small>${item.actividad || ''}</small>`
+        );
+
+        markerCluster.addLayer(marker);
+      });
+
+      map.addLayer(markerCluster);
+
+      const layers = markerCluster.getLayers();
+      if (layers.length > 0) {
+        const bounds = markerCluster.getBounds();
+        map.fitBounds(bounds.pad(0.1));
+        infoCount.textContent = `Librerías mostradas: ${layers.length}`;
+      } else {
+        infoCount.textContent = 'No hay librerías que coincidan con el filtro.';
+      }
+    }
+
+    // Eventos de filtros
+    provinciaFilter.addEventListener('change', () => {
+      fillCantonFilter(allData);
+      fillParroquiaFilter(allData);
+      applyFilters();
+    });
+
+    cantonFilter.addEventListener('change', () => {
+      fillParroquiaFilter(allData);
+      applyFilters();
+    });
+
+    parroquiaFilter.addEventListener('change', () => {
+      applyFilters();
+    });
+
+    searchInput.addEventListener('input', () => {
+      applyFilters();
+    });
+
+    // Botón Reset
+    resetButton.addEventListener('click', () => {
+      provinciaFilter.value = 'all';
+      fillCantonFilter(allData);
+      cantonFilter.value = 'all';
+      fillParroquiaFilter(allData);
+      parroquiaFilter.value = 'all';
+      searchInput.value = '';
+      applyFilters();
+    });
+  </script>
+</body>
+</html>
